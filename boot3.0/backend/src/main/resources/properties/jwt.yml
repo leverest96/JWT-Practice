@@ -1,7 +1,7 @@
 jwt:
   access-token:
     secret-key: ${JWT_ACCESS_TOKEN_SECRET_KEY:jwt-access-token-secret-key-for-lingo-town-access-token}
-    valid-seconds: 1800
+    valid-seconds: 30000
   refresh-token:
     secret-key: ${JWT_REFRESH_TOKEN_SECRET_KEY:jwt-refresh-token-secret-key-for-lingo-town-refresh-token}
     valid-seconds: 604800

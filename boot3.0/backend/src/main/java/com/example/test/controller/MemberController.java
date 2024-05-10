@@ -7,9 +7,11 @@ import com.example.test.dto.MemberRegisterRequestDto;
 import com.example.test.properties.jwt.AccessTokenProperties;
 import com.example.test.security.web.userdetails.MemberDetails;
 import com.example.test.service.MemberService;
+import com.example.test.utility.CookieUtility;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -35,8 +37,11 @@ public class MemberController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<MemberLoginResponseDto> login(@RequestBody final MemberLoginRequestDto requestDto) {
-        memberService.login(requestDto);
+    public ResponseEntity<MemberLoginResponseDto> login(final HttpServletResponse response,
+                                                        @RequestBody final MemberLoginRequestDto requestDto) {
+        final MemberLoginResponseDto responseDto = memberService.login(requestDto);
+
+        CookieUtility.addCookie(response, AccessTokenProperties.COOKIE_NAME, responseDto.getAccessToken());
 
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
@@ -48,10 +53,17 @@ public class MemberController {
         return ResponseEntity.ok().body(responseDto);
     }
 
-    @PostMapping("/logout")
-    public ResponseEntity<Void> logout() {
-        memberService.removeAccessToken();
+    @PostMapping("/removeToken")
+    public ResponseEntity<Void> removeToken(@AuthenticationPrincipal final MemberDetails memberDetails) {
+        memberService.removeToken(memberDetails.getMemberId());
 
-        return ResponseEntity.status(HttpStatus.CREATED).build();
+        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(final HttpServletResponse response) {
+        CookieUtility.deleteCookie(response, AccessTokenProperties.COOKIE_NAME);
+
+        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
 }

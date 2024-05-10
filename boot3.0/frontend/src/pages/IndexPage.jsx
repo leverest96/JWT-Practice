@@ -4,7 +4,12 @@ const IndexPage = () => {
   const logout = () => {
     axios.post("http://localhost:8080/api/member/logout")
       .then((response) => {
-        alert("로그아웃을 성공했습니다." + response);
+        // axios.post("http://localhost:8080/api/member/logout")
+        // .then((response) => {
+        //   alert("로그아웃을 성공했습니다." + response);
+        //   window.location.replace("/");
+        // })
+        alert("로그아웃을 성공했습니다." + response.status);
         window.location.replace("/");
       })
       .catch((error) => {

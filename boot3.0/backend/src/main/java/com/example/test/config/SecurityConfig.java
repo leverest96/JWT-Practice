@@ -4,8 +4,10 @@ import com.example.test.exception.handler.AccessDeniedExceptionHandler;
 import com.example.test.exception.handler.AuthenticationExceptionHandler;
 import com.example.test.properties.jwt.AccessTokenProperties;
 import com.example.test.properties.jwt.RefreshTokenProperties;
+import com.example.test.properties.security.SecurityCorsProperties;
 import com.example.test.repository.MemberRepository;
-import com.example.test.repository.RedisRepository;
+import com.example.test.repository.RedisBlackListRepository;
+import com.example.test.repository.RedisRefreshTokenRepository;
 import com.example.test.security.oauth2.handler.OAuth2AuthenticationSuccessHandler;
 import com.example.test.security.oauth2.oauth2userdetails.CustomOAuth2UserService;
 import com.example.test.security.web.authentication.CustomAuthenticationConverter;
@@ -38,21 +40,24 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.*;
 import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationToken;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.CorsUtils;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(final HttpSecurity http,
-//                                                   final CorsConfigurationSource corsConfigurationSource,
+                                                   final CorsConfigurationSource corsConfigurationSource,
                                                    final AuthenticationFilter authenticationFilter,
                                                    final OAuth2UserService<OAuth2UserRequest, OAuth2User> oAuth2UserService,
                                                    final AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler,
                                                    final AuthenticationFailureHandler authenticationFailureHandler,
                                                    final AuthenticationEntryPoint authenticationEntryPoint,
                                                    final AccessDeniedHandler accessDeniedHandler) throws Exception {
-//        http.cors().configurationSource(corsConfigurationSource);
+        http.cors().configurationSource(corsConfigurationSource);
 
         http.sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
 
@@ -65,7 +70,7 @@ public class SecurityConfig {
 
         http.authorizeHttpRequests((authorize) -> authorize
                 .requestMatchers(HttpMethod.GET, "/api/member/").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/member/register", "/api/member/login", "/api/member/logout", "/api/member/email/**").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/member/register", "/api/member/login", "/api/member/email/**", "/api/member/removeToken", "/api/member/logout").permitAll()
                 .anyRequest().authenticated()
         );
 
@@ -99,30 +104,29 @@ public class SecurityConfig {
                 .requestMatchers(PathRequest.toH2Console());
     }
 
-//    @Bean
-//    public CorsConfigurationSource corsConfigurationSource(final SecurityCorsProperties properties) {
-//        final CorsConfiguration corsConfiguration = new CorsConfiguration();
-//
-//        corsConfiguration.setAllowCredentials(properties.isAllowCredentials());
-//        corsConfiguration.setAllowedHeaders(properties.getAllowedHeaders());
-//        corsConfiguration.setAllowedMethods(properties.getAllowedMethods());
-//        corsConfiguration.setAllowedOrigins(properties.getAllowedOrigins());
-//        corsConfiguration.setMaxAge(corsConfiguration.getMaxAge());
-//
-//        final UrlBasedCorsConfigurationSource corsConfigurationSource = new UrlBasedCorsConfigurationSource();
-//
-//        corsConfigurationSource.registerCorsConfiguration("/**", corsConfiguration);
-//
-//        return corsConfigurationSource;
-//    }
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource(final SecurityCorsProperties properties) {
+        final CorsConfiguration corsConfiguration = new CorsConfiguration();
+
+        corsConfiguration.setAllowCredentials(properties.isAllowCredentials());
+        corsConfiguration.setAllowedHeaders(properties.getAllowedHeaders());
+        corsConfiguration.setAllowedMethods(properties.getAllowedMethods());
+        corsConfiguration.setAllowedOrigins(properties.getAllowedOrigins());
+        corsConfiguration.setMaxAge(corsConfiguration.getMaxAge());
+
+        final UrlBasedCorsConfigurationSource corsConfigurationSource = new UrlBasedCorsConfigurationSource();
+
+        corsConfigurationSource.registerCorsConfiguration("/**", corsConfiguration);
+
+        return corsConfigurationSource;
+    }
 
     @Bean
     public AuthenticationFilter authenticationFilter(final AuthenticationManager authenticationManager,
                                                      final AuthenticationConverter authenticationConverter,
-                                                     final RedisRepository redisRepository,
                                                      final AuthenticationSuccessHandler authenticationSuccessHandler,
                                                      final AuthenticationFailureHandler authenticationFailureHandler) {
-        final AuthenticationFilter authenticationFilter = new CustomAuthenticationFilter(authenticationManager, authenticationConverter, redisRepository);
+        final AuthenticationFilter authenticationFilter = new CustomAuthenticationFilter(authenticationManager, authenticationConverter);
 
         authenticationFilter.setSuccessHandler(authenticationSuccessHandler);
         authenticationFilter.setFailureHandler(authenticationFailureHandler);
@@ -136,8 +140,8 @@ public class SecurityConfig {
     }
 
     @Bean
-    public AuthenticationConverter authenticationConverter(final RedisRepository redisRepository) {
-        return new CustomAuthenticationConverter(redisRepository);
+    public AuthenticationConverter authenticationConverter() {
+        return new CustomAuthenticationConverter();
     }
 
     @Bean(name = "authenticationSuccessHandler")
@@ -169,19 +173,21 @@ public class SecurityConfig {
 
     @Bean(name = "oAuth2AuthenticationSuccessHandler")
     public AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler(final MemberRepository memberRepository,
-                                                                           final RedisRepository redisRepository,
+                                                                           final RedisRefreshTokenRepository redisRefreshTokenRepository,
+                                                                           final RedisBlackListRepository redisBlackListRepository,
                                                                            final JwtProvider accessTokenProvider,
                                                                            final JwtProvider refreshTokenProvider) {
-        return new OAuth2AuthenticationSuccessHandler(memberRepository, redisRepository, accessTokenProvider, refreshTokenProvider);
+        return new OAuth2AuthenticationSuccessHandler(memberRepository, redisRefreshTokenRepository, redisBlackListRepository, accessTokenProvider, refreshTokenProvider);
     }
 
     @Bean
     public AuthenticationEntryPoint authenticationEntryPoint(final MemberRepository memberRepository,
-                                                             final RedisRepository redisRepository,
+                                                             final RedisRefreshTokenRepository redisRefreshTokenRepository,
+                                                             final RedisBlackListRepository redisBlackListRepository,
                                                              final JwtProvider accessTokenProvider,
                                                              final JwtProvider refreshTokenProvider,
                                                              final ObjectMapper objectMapper) {
-        return new AuthenticationExceptionHandler(memberRepository, redisRepository, accessTokenProvider, refreshTokenProvider, objectMapper);
+        return new AuthenticationExceptionHandler(memberRepository, redisRefreshTokenRepository, redisBlackListRepository, accessTokenProvider, refreshTokenProvider, objectMapper);
     }
 
     @Bean

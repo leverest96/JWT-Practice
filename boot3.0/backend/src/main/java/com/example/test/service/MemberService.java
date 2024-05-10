@@ -4,7 +4,8 @@ import com.example.test.domain.Member;
 import com.example.test.domain.enums.GenderType;
 import com.example.test.domain.enums.LoginType;
 import com.example.test.domain.enums.MemberRole;
-import com.example.test.domain.redis.AccessToken;
+import com.example.test.domain.redis.BlackList;
+import com.example.test.domain.redis.RefreshToken;
 import com.example.test.dto.MemberInfoResponseDto;
 import com.example.test.dto.MemberLoginRequestDto;
 import com.example.test.dto.MemberLoginResponseDto;
@@ -12,7 +13,8 @@ import com.example.test.dto.MemberRegisterRequestDto;
 import com.example.test.exception.MemberException;
 import com.example.test.exception.status.MemberStatus;
 import com.example.test.repository.MemberRepository;
-import com.example.test.repository.RedisRepository;
+import com.example.test.repository.RedisBlackListRepository;
+import com.example.test.repository.RedisRefreshTokenRepository;
 import com.example.test.utility.JwtProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -27,7 +29,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class MemberService {
     private final MemberRepository memberRepository;
-    private final RedisRepository redisRepository;
+    private final RedisRefreshTokenRepository redisRefreshTokenRepository;
+    private final RedisBlackListRepository redisBlackListRepository;
 
     private final PasswordEncoder passwordEncoder;
 
@@ -81,15 +84,19 @@ public class MemberService {
 
         final String accessToken = accessTokenProvider.createAccessToken(memberId, loginId);
         final String refreshToken = refreshTokenProvider.createRefreshToken(memberId);
-        final int refreshTokenValidSeconds = refreshTokenProvider.getValidSeconds();
 
-        redisRepository.save(new AccessToken(AccessToken.ACCESS_TOKEN_KEY, accessToken));
+        if (redisBlackListRepository.findById(refreshToken).isPresent()) {
+            throw new MemberException(MemberStatus.BLACK_LIST_REFRESH_TOKEN);
+        }
+
+        redisRefreshTokenRepository.save(
+                new RefreshToken(RefreshToken.REFRESH_TOKEN_KEY + memberId, refreshToken)
+        );
+
         member.updateRefreshToken(refreshToken);
 
         return MemberLoginResponseDto.builder()
                 .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .refreshTokenValidSeconds(refreshTokenValidSeconds)
                 .build();
     }
 
@@ -105,11 +112,23 @@ public class MemberService {
     }
 
     @Transactional
-    public void removeAccessToken() {
-        final Optional<AccessToken> accessToken = redisRepository.findById(AccessToken.ACCESS_TOKEN_KEY);
+    public void removeToken(final long memberId) {
+        final Optional<RefreshToken> refreshToken = redisRefreshTokenRepository.findById(
+                RefreshToken.REFRESH_TOKEN_KEY + memberId
+        );
 
-        if (accessToken.isPresent()) {
-            redisRepository.deleteById(AccessToken.ACCESS_TOKEN_KEY);
+        if (refreshToken.isPresent()) {
+            final String exRefreshToken = refreshToken.map(RefreshToken::getRefreshToken).orElse(null);
+
+            redisBlackListRepository.save(new BlackList(exRefreshToken, BlackList.BLACK_LIST_VALUE));
+
+            redisRefreshTokenRepository.deleteById(RefreshToken.REFRESH_TOKEN_KEY + memberId);
+
+            final Member member = memberRepository.findById(memberId).orElseThrow(
+                    () -> new MemberException(MemberStatus.NOT_EXISTING_MEMBER)
+            );
+
+            member.updateRefreshToken(null);
         } else {
             throw new IllegalArgumentException("로그인하지 않은 유저입니다.");
         }

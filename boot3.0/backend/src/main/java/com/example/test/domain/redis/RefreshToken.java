@@ -7,12 +7,12 @@ import org.springframework.data.redis.core.RedisHash;
 
 @AllArgsConstructor
 @Getter
-@RedisHash(value = "access_token", timeToLive = 60*60*30)
-public class AccessToken {
-    public static final String ACCESS_TOKEN_KEY = "access_token";
+@RedisHash(value = "refresh_token", timeToLive = 60*60*24*7)
+public class RefreshToken {
+    public static final String REFRESH_TOKEN_KEY = "refresh_token_";
 
     @Id
     private String id;
 
-    private String accessToken;
+    private String RefreshToken;
 }
